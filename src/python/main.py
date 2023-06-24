@@ -3,6 +3,8 @@ from random import sample
 import numpy as np
 from PIL import Image
 
+# np.random.seed(0)
+
 
 # read image from file using numpy
 def load_image_as_array(filename):
@@ -34,8 +36,8 @@ class GeneticAlgorithm:
         self.score = np.ones(self.population_size) * np.inf
 
     def single_mutation(self, individual: np.array):
-        inx = np.random.choice(np.arange(self.target.size), size=self.mutation_arr_size)
-        individual[inx] = np.where(individual[inx] == 1, 0, 1)
+        inx = np.random.choice(np.arange(individual.size), size=self.mutation_arr_size)
+        individual[inx] = np.random.choice([0, 1], size=inx.size)
         return individual
 
     def mutation(self, population: np.array):
@@ -50,9 +52,13 @@ class GeneticAlgorithm:
         patent2 = population[np.random.choice(np.arange(population.shape[0]))]
         return np.concatenate((parent1[:inx], patent2[inx:]))
 
+    def per_item_all(self, parent1: np.array, population: np.array):
+        patent2 = population[np.random.choice(np.arange(population.shape[0]))]
+        return np.where(parent1 == patent2, parent1, np.random.choice([0, 1], size=parent1.size))
+
     def crossover(self, population: np.array):
         # population (to crossover) is a subset of the self.population
-        return np.apply_along_axis(func1d=self.single_crossover, axis=1, arr=population, population=population)
+        return np.apply_along_axis(func1d=self.per_item_all, axis=1, arr=population, population=population)
 
     def fitness(self, population: np.array):
         self.score = np.square(population - self.target).mean(axis=1)
@@ -66,7 +72,7 @@ class GeneticAlgorithm:
         self.genesis()
         self.best_score = np.inf
 
-        for i in range(self.generations):
+        for i in range(1, self.generations + 1):
             # sort the population by the fitness score
             self.population = self.sort_population(self.population)
 
@@ -74,8 +80,8 @@ class GeneticAlgorithm:
             elite = self.population[: self.elite_size]
 
             # crossover
-            # new_population = self.crossover(self.population[self.elite_size :])
-            new_population = self.population[self.elite_size :]
+            new_population = self.crossover(self.population[: -self.elite_size])
+
             # mutation
             inx_to_mutate = np.random.choice(np.arange(new_population.shape[0]), size=self.mutation_size)
             new_population[inx_to_mutate] = self.mutation(new_population[inx_to_mutate])
@@ -86,18 +92,20 @@ class GeneticAlgorithm:
 
             if self.score.min() < self.best_score:
                 self.best_score = self.score.min()
-                print(f"Gen. {i}: Best individual: {self.score.min():.10f}")
-
+                print(f"Gen. {i}: Best individual: {self.score.min()}")
+                if self.best_score == 0:
+                    break
+                    
+        print(f"Run Ended at Gen. {i}: Best individual: {self.score.min()}")
         return self.sort_population(self.population)
 
 
 if __name__ == "__main__":
-    path = "data/docker_1ch_resized.png"
+    path = "data/docker_1ch_s100x100.png"
     image = load_image_as_array(path)
 
-
     ga = GeneticAlgorithm(
-        image, population_size=100, elite_rate=0.1, mutation_pop_rate=1, mutation_arr_rate=0.15, generations=1000
+        image, population_size=500, elite_rate=0.3, mutation_pop_rate=0.05, mutation_arr_rate=0.05, generations=500
     )
     pop = ga.run()
 
@@ -105,4 +113,4 @@ if __name__ == "__main__":
     best = pop[0].reshape(ga.image_shape).astype(float)
     best *= 255
 
-    Image.fromarray(best).convert('RGB').save("data/output/best_individual.png")
+    Image.fromarray(best).convert("RGB").save("data/output/best_individual.png")
