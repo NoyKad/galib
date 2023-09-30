@@ -10,12 +10,12 @@ import rand
 
 struct Individual {
 mut:
-	chromosome []u8
+	chromosome []int
 	fitness    int
 }
 
-fn concatenate(mut array1 [][]u8, mut array2 [][]u8) ![][]u8 {
-	mut joined := [][]u8{len: array1.len + array2.len}
+fn concatenate(mut array1 [][]int, mut array2 [][]int) ![][]int {
+	mut joined := [][]int{len: array1.len + array2.len}
 
 	for i in 0 .. array1.len {
 		joined[i] = array1[i]
@@ -28,18 +28,18 @@ fn concatenate(mut array1 [][]u8, mut array2 [][]u8) ![][]u8 {
 	return joined
 }
 
-fn init_individual(size int) ![]u8 {
-	mut chromosome := []u8{len: size}
+fn init_individual(size int) ![]int {
+	mut chromosome := []int{len: size}
 
 	for i in 0 .. size {
-		chromosome[i] = u8(rand.binomial(1, 0.5)!)
+		chromosome[i] = int(rand.binomial(1, 0.5)!)
 	}
 
 	return chromosome
 }
 
-fn genesis(pop_size int, chromosome_size int) ![][]u8 {
-	mut population := [][]u8{len: pop_size}
+fn genesis(pop_size int, chromosome_size int) ![][]int {
+	mut population := [][]int{len: pop_size}
 
 	for i in 0 .. pop_size {
 		population[i] = init_individual(chromosome_size)!
@@ -48,8 +48,8 @@ fn genesis(pop_size int, chromosome_size int) ![][]u8 {
 	return population
 }
 
-fn single_crossover(parent1 []u8, parent2 []u8) ![]u8 {
-	mut child := []u8{len: parent1.len}
+fn single_crossover(parent1 []int, parent2 []int) ![]int {
+	mut child := []int{len: parent1.len}
 
 	split := rand.int_in_range(0, parent1.len)!
 
@@ -64,8 +64,8 @@ fn single_crossover(parent1 []u8, parent2 []u8) ![]u8 {
 	return child
 }
 
-fn crossover(population [][]u8) ![][]u8 {
-	mut new_population := [][]u8{len: population.len}
+fn crossover(population [][]int) ![][]int {
+	mut new_population := [][]int{len: population.len}
 
 	for i in 0 .. population.len {
 		parent1 := population[rand.int_in_range(0, population.len)!]
@@ -77,7 +77,7 @@ fn crossover(population [][]u8) ![][]u8 {
 	return new_population
 }
 
-fn single_mutation(mut chromosome []u8, mutation_rate f64) ![]u8 {
+fn single_mutation(mut chromosome []int, mutation_rate f64) ![]int {
 	proportion := int(mutation_rate * chromosome.len)
 	assert proportion > 0, 'mutation rate too low'
 
@@ -94,7 +94,7 @@ fn single_mutation(mut chromosome []u8, mutation_rate f64) ![]u8 {
 	return chromosome
 }
 
-fn mutation(mut population [][]u8, mutation_rate f64) ![][]u8 {
+fn mutation(mut population [][]int, mutation_rate f64) ![][]int {
 	for i in 0 .. population.len {
 		population[i] = single_mutation(mut population[i], mutation_rate)!
 	}
@@ -102,29 +102,29 @@ fn mutation(mut population [][]u8, mutation_rate f64) ![][]u8 {
 	return population
 }
 
-fn single_fitness(chromosome []u8) int {
+fn single_fitness(chromosome []int, target []int) int {
 	mut fitness := 0
 
-	for i in chromosome {
-		fitness += i
+	for i, value in chromosome {
+		fitness += int(value == target[i])
 	}
 
 	return fitness
 }
 
-fn fitness(population [][]u8) ![]int {
+fn fitness_fn(population [][]int, target []int) ![]int {
 	mut fitness := []int{len: population.len}
 
 	for i in 0 .. population.len {
-		fitness[i] = single_fitness(population[i])
+		fitness[i] = single_fitness(population[i], target)
 	}
 
 	return fitness
 }
 
-fn sort_by_fitness(mut population [][]u8, mut fitness []int) ![][]u8 {
+fn sort_by_fitness(mut population [][]int, mut fitness []int) ![][]int {
 	mut struct_fitness := []Individual{len: population.len}
-	mut new_population := [][]u8{len: population.len}
+	mut new_population := [][]int{len: population.len}
 
 	for i in 0 .. population.len {
 		struct_fitness[i] = Individual{
@@ -143,12 +143,12 @@ fn sort_by_fitness(mut population [][]u8, mut fitness []int) ![][]u8 {
 	return new_population
 }
 
-fn generation(mut population [][]u8, mutation_rate f64, elite_rate f64) ![][]u8 {
+fn generation(mut population [][]int, mutation_rate f64, elite_rate f64, target []int) ![][]int {
 	n_elite := int(population.len * elite_rate)
-	mut scores := fitness(population)!
+	mut scores := fitness_fn(population, target)!
 	population = sort_by_fitness(mut population, mut scores)!
 
-	mut elite := population[0..n_elite].clone()
+	mut elite := population[..n_elite].clone()
 
 	mut new_population := crossover(population[n_elite..])!
 	new_population = mutation(mut new_population, mutation_rate)!
@@ -156,17 +156,35 @@ fn generation(mut population [][]u8, mutation_rate f64, elite_rate f64) ![][]u8 
 }
 
 fn main() {
-	mut population := genesis(5000, 20)!
 
-	for i in 0 .. 1000 {
-		population = generation(mut population, 0.1, 0.1)!
+	n := 50
+	verbose := 1000
+	pop_size := 100
+
+	// target
+	target := []int{len: n, init: 1}
+
+	mut	population := genesis(pop_size, n)!
+	mut flag := false
+	mut i := 0
+	
+	for flag == false {
+		population = generation(mut population, 0.05, 0.1, target)!
 
 		// print each 10 generations
-		if i % 10 == 0 {
+		if i % verbose == 0 {
 			println('Generation: ' + i.str() + ' Best individual: ' + population[0].str() +
-				' with fitness: ' + single_fitness(population[0]).str())
+				' with fitness: ' + single_fitness(population[0], target).str())
+		}
+		i += 1
+
+		// check if the target has been reached
+		if single_fitness(population[0], target) == target.len {
+			flag = true
 		}
 	}
 	println('Best individual: ' + population[0].str() + ' with fitness: ' +
-		single_fitness(population[0]).str())
+		single_fitness(population[0], target).str())
+
+	println('Target: ' + target.str())
 }
